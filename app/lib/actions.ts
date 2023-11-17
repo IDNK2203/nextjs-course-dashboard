@@ -7,23 +7,47 @@ import { sql } from "@vercel/postgres";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+export type State = {
+  errors?: {
+    customerId?: string[];
+    amount?: string[];
+    status?: string[];
+  };
+  message?: string | null;
+};
+
 const formSchema = z.object({
-  id: z.string(),
+  id: z.string({
+    invalid_type_error: "Please select a customer.",
+  }),
   customerId: z.string(),
-  amount: z.coerce.number(),
-  status: z.enum(["pending", "paid"]),
+  amount: z.coerce
+    .number()
+    .gt(0, { message: "Please enter an amount greater than $0." }),
+
+  status: z.enum(["pending", "paid"], {
+    invalid_type_error: "Please select an invoice status.",
+  }),
   date: z.string(),
 });
 
 const createInvoiceSchema = formSchema.omit({ id: true, date: true });
 
-export async function createInvoice(formData: FormData) {
-  const { customerId, status, amount } = createInvoiceSchema.parse({
+export async function createInvoice(state: State, formData: FormData) {
+  const validatedFields = createInvoiceSchema.safeParse({
     customerId: formData.get("customerId"),
     status: formData.get("status"),
     amount: formData.get("amount"),
   });
 
+  if (!validatedFields.success) {
+    return {
+      erorrs: validatedFields.error.flatten().fieldErrors,
+      message: "Missing Fields: Failed to Create Invoice",
+    };
+  }
+
+  const { customerId, status, amount } = validatedFields.data;
   const amountInCents = amount * 100;
   const date = new Date().toISOString().split("T")[0];
   try {
@@ -63,7 +87,7 @@ export async function updateInvoice(id: string, formData: FormData) {
 }
 
 export async function deleteInvoice(id: string) {
-  throw new Error("Failed to Delete Invoice");
+  // throw new Error("Failed to Delete Invoice");
   try {
     await sql`DELETE FROM invoices WHERE id = ${id}`;
     revalidatePath("/dashboard/invoices");
