@@ -6,6 +6,7 @@ import { z } from "zod";
 import { sql } from "@vercel/postgres";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { signIn } from "@/auth";
 
 export type State = {
   errors?: {
@@ -98,5 +99,26 @@ export async function deleteInvoice(id: string) {
     return {
       message: "Database Error: Failed to Delete Invoice.",
     };
+  }
+}
+
+export async function authenticate(
+  prevState: string | undefined,
+  formData: FormData
+) {
+  try {
+    await signIn("credentials", {
+      ...Object.fromEntries(formData),
+      callbackUrl: "http://127.0.0.1:3000/user/dashboard",
+      redirect: false,
+    });
+    console.log("All Clear");
+  } catch (error) {
+    console.log("Not All Clear", "\n", error);
+
+    if ((error as Error).message.includes("CredentialsSignin")) {
+      return "CredentialsSignin";
+    }
+    throw error;
   }
 }
